@@ -27,7 +27,10 @@ import logging
 import ControlGroupCollection
 import ControlGroupRecords
 import GoogleSearch
+import BingSearch
 
+from GoogleSearch import ReCaptchaError, NoResultsReturnedError
+from BingSearch import ReCaptchaError, NoResultsReturnedError
 
 product_collection = ControlGroupCollection.ControlGroupMasterDataSet
 retry_collection = pd.DataFrame()
@@ -39,87 +42,24 @@ zero_product_count = 0
 attribute_errors = 0
 start_control_timer = 0
 
-"""
-def duplicate_check(current_control_group, control, source_description):
-    global product_collection
-    if product_collection.empty:
-        return False
-
-    result = product_collection.loc[product_collection['Searched For This Item'] == source_description]
-
-    if result.empty:  # No Duplicate Record Found
-        return False
-
-    if len(result.index) > 1:     # when multiple records are returned, use data from last row in selection
-        try:
-            current_control_group.control_number = control
-            current_control_group.search_for_description = source_description
-            current_control_group.found_description = result["Selected Item Description"][0:1]
-            current_control_group.found_price = float(result["Price"][0:1])
-            current_control_group.low_price = float(result["Low"][0:1])
-            current_control_group.high_price = float(result["High"][0:1])
-            current_control_group.source_url = result["URL Used For Search"][0:1]
-            current_control_group.found_search_url = result["Selected Item URL"][0:1]
-        except:
-            return False
-    else:   # only 1 duplicate record found in the control_group
-        try:
-            current_control_group.control_number = control
-            current_control_group.search_for_description = source_description
-            current_control_group.found_description = result["Selected Item Description"]
-            current_control_group.found_price = float(result["Price"])
-            current_control_group.low_price = float(result["Low"])
-            current_control_group.high_price = float(result["High"])
-            current_control_group.source_url = result["URL Used For Search"]
-            current_control_group.found_search_url = result["Selected Item URL"]
-        except:
-            return False
-
-    current_control_group.add_record()
-    return True
-"""
-
-
-class ReCaptchaError(Exception):
-    """Exception raised when ReCaptcha Screen Encountered
-
-    Attributes:
-        salary -- input salary which caused the error
-        message -- explanation of the error
-    """
-    def __init__(self, message="reCaptcha Screen is blocking our search"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class NoResultsReturnedError(Exception):
-    """Exception raised when ReCaptcha Screen Encountered
-
-    Attributes:
-        salary -- input salary which caused the error
-        message -- explanation of the error
-    """
-    def __init__(self, message="No Results Returned for search"):
-        self.message = message
-        super().__init__(self.message)
-# --------------------------  End of Exception Definitions --------------------------------
 
 def check_and_handle_duplicate_records(product_collection, control_group_df, new_control_number, new_search_description):
 
-    if not product_collection.empty:
-        result = product_collection.loc[product_collection['Searched For This Item'] == new_search_description]
+    try:
+        if not product_collection.empty:
+            result = product_collection.loc[product_collection['Searched For This Item'] == new_search_description]
 
         if not result.empty:
             if len(result.index) > 1:  # when multiple records are returned, use data from last row in selection
                 try:
                     control_group_df.control_number = new_control_number
                     control_group_df.search_for_description = new_search_description
-                    control_group_df.found_description = result["Selected Item Description"][0:1]
+                    control_group_df.found_description = result["Selected Item Description"][0:1].values[0]
                     control_group_df.found_price = float(result["Price"][0:1])
                     control_group_df.low_price = float(result["Low"][0:1])
                     control_group_df.high_price = float(result["High"][0:1])
-                    control_group_df.source_url = result["URL Used For Search"][0:1]
-                    control_group_df.found_search_url = result["Selected Item URL"][0:1]
+                    control_group_df.source_url = result["URL Used For Search"][0:1].values[0]
+                    control_group_df.found_search_url = result["Selected Item URL"][0:1].values[0]
                 except Exception:
                     print('Warning -- Error checking for duplicates: result.index > 1 ')
                     e = sys.exc_info()[0]
@@ -129,12 +69,12 @@ def check_and_handle_duplicate_records(product_collection, control_group_df, new
                 try:
                     control_group_df.control_number = new_control_number
                     control_group_df.search_for_description = new_search_description
-                    control_group_df.found_description = result["Selected Item Description"]
+                    control_group_df.found_description = result["Selected Item Description"].values[0]
                     control_group_df.found_price = float(result["Price"])
                     control_group_df.low_price = float(result["Low"])
                     control_group_df.high_price = float(result["High"])
-                    control_group_df.source_url = result["URL Used For Search"]
-                    control_group_df.found_search_url = result["Selected Item URL"]
+                    control_group_df.source_url = result["URL Used For Search"].values[0]
+                    control_group_df.found_search_url = result["Selected Item URL"].values[0]
                 except Exception:
                     print('Warning -- Error checking for duplicates: result.index = 1 ')
                     e = sys.exc_info()[0]
@@ -142,8 +82,16 @@ def check_and_handle_duplicate_records(product_collection, control_group_df, new
                     exit(2)
 
             # add this record to the control group control_group
-            control_group_df.add_record_to_control_group()
+            try:
+                control_group_df.add_record_to_control_group()
+            except NoResultsReturnedError:
+                logging.warning("Error adding this record to control group: " + control_group_df.control_number)
+                pass
             return True
+    except AttributeError as e:
+        logging.warning("Checking for Duplicates: AttributeError: 'NoneType' object has no attribute 'empty' \
+            -- returning Skipping Duplicate Check")
+        return False
     return False
 
 
@@ -160,11 +108,13 @@ def read_file(input_file_name):
     product_collection = cgc.get_collections()
 
     gs = GoogleSearch.GoogleRecordSearch()
+    bs = BingSearch.DuckDuckGoSearch()
     last_control_number = ''
     source_data_file = ''
     control_group = ''
     new_control_number = ''
     new_search_for_description = ''
+    use_Bing_Search= True
 
     try:
         source_data_file = pd.read_excel(input_file_name)
@@ -191,20 +141,26 @@ def read_file(input_file_name):
         new_search_for_description = row[1]
 
         if not first_pass:
-            if check_and_handle_duplicate_records(product_collection, control_group, new_control_number, new_search_for_description):
-                product_collection = control_group.add_selected_control_group_record_to_collection(product_collection)
-                continue  # if duplicate record found, -- no need to look up again
+            if check_and_handle_duplicate_records(product_collection,
+                                                  control_group,
+                                                  new_control_number,
+                                                  new_search_for_description):
+                try:
+                    product_collection = control_group.add_selected_control_group_record_to_collection(product_collection)
+                    continue  # if duplicate record found, -- no need to look up again
+                except NoResultsReturnedError as e:
+                    logging.warning("Failed to Add Record to Master Collection: " + control_group.control_number +
+                                    "Processing will continue to the next record")
+                    continue
 
-        url_to_search = "https://www.google.com/search?tbm=shop&q=" + row[1]
+        if use_Bing_Search:
+            url_to_search = "https://www.bing.com/shop?q=" + new_search_for_description
+        else:
+            url_to_search = "https://www.google.com/search?tbm=shop&q=" + new_search_for_description
 
         if first_pass:
             last_control_number = new_control_number
             first_pass = False
-
-        #if last_control_number != new_control_number:
-            # Choose the correct record from the control group and add to master data set
-            #control_group.add_selected_control_group_record_to_collection(product_collection)
-            #control_group = ControlGroupRecords.ControlGroupDataSet()  #re-init control-group
 
         control_group.control_number            = new_control_number
         control_group.search_for_description    = new_search_for_description
@@ -213,28 +169,51 @@ def read_file(input_file_name):
 
         # Search the Web for this data
         try:
-            gs.item_search(control_group)
-        except ReCaptchaError:
+            if use_Bing_Search:
+                bs.item_search(control_group)
+            else:
+                gs.item_search(control_group)
+        except ReCaptchaError as e:
             logging.info("**Control Number: %s was blocked by reCaptcha Screen", control_group.control_number)
-        except NoResultsReturnedError:
-            logging.info(("**No Results were returned for Control #: %s --Description: %s",
-                          control_group.control_number, control_group.search_for_description))
-        finally:
             continue
+        except NoResultsReturnedError as e:
+            # Build the record and commit it to the dataset
+            control_group.control_number = control_group.control_number
+            control_group.search_for_description = control_group.search_for_description
+            control_group.found_description = "No Search Results were returned for this item"
+            control_group.found_price = float("0.00")
+            control_group.low_price = float("0.00")
+            control_group.high_price = float("0.00")
+            control_group.source_url = control_group.source_url
+            control_group.found_search_url = "No Search Results were returned for this item"
+            try:
+                product_collection = control_group.add_selected_control_group_record_to_collection(product_collection)
+            except NoResultsReturnedError as e:
+                logging.warning("Error Thrown trying to add the 'No Search Results Dummy Record'")
+                pass
+
+            logging.warning("**No Results were returned for Control #: %s --Description: %s",
+                          control_group.control_number,
+                          control_group.search_for_description)
+            continue
+        #finally:
+            #continue
 
         product_collection = control_group.select_record_from_control_group(product_collection)
 
-    check_and_handle_duplicate_records(control_group.get_df_collection(), new_control_number, new_search_for_description)
-    #pcg.process_control_group(control_group.get_df_collection())  # Used to write the last record to the file
+    check_and_handle_duplicate_records(product_collection,
+                                       control_group.get_df_collection(),
+                                       new_control_number,
+                                       new_search_for_description)
 
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(levelname)s:%(message)s',
-                        filename='C:/Users/JRytt/Documents/Brad V/AutoSelection.log',
+                        filename='C:/Users/JRytt/Documents/Brad V/Product v4/WIP/AutoSelection.log',
                         level=logging.INFO)
     logging.info('Started')
     startTimer = time.perf_counter()
-    read_file('C:/Users/JRytt/Documents/Brad V/Price Sample v3(wip).xlsx')
+    read_file('C:/Users/JRytt/Documents/Brad V/Product v4/WIP/Price Sample v4(wip).xlsx')
 
     print(f'Zero Product Counter = {zero_product_count}')
     print(f'Total Records from File = {total_records_from_file}')
@@ -255,7 +234,7 @@ if __name__ == '__main__':
     # Create a Pandas Excel writer using XlsxWriter as the engine.
     now = datetime.now()  # current date and time
     date_time = now.strftime("%H_%M_%S")
-    writer = pd.ExcelWriter("C:/Users/JRytt/Documents/Brad V/AutoSelection_Output_" + date_time + ".xlsx",
+    writer = pd.ExcelWriter("C:/Users/JRytt/Documents/Brad V/Product v4/WIP/AutoSelection_Output_" + date_time + ".xlsx",
                             engine='xlsxwriter')
 
     # Convert the dataframe to an XlsxWriter Excel object.
@@ -264,7 +243,7 @@ if __name__ == '__main__':
     # Close the Pandas Excel writer and output the Excel file.
     writer.save()
 
-    # product_collection.to_excel('C:/Users/JRytt/Documents/Brad V/JobComplete_v4.xlsx', index=False)
+    # product_collection.to_excel('C:/Users/JRytt/Documents/Brad V/Product v4/WIP/JobComplete_v4.xlsx', index=False)
     stopTimer = time.perf_counter()
     print(f"Program run time: {stopTimer - startTimer:0.4f} seconds")
     exit()

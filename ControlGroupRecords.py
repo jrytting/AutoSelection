@@ -4,19 +4,10 @@ import pandas as pd
 import time
 import sys
 import ControlGroupCollection
+from GoogleSearch import NoResultsReturnedError
+from GoogleSearch import ReCaptchaError
 
 
-class DuplicateRecordError(Exception):
-    """Exception raised duplicate record found in parent collection
-
-    Attributes:
-        salary -- input salary which caused the error
-        message -- explanation of the error
-    """
-    def __init__(self, message="Found a matching record in the parent control_group"):
-        self.message = message
-        super().__init__(self.message)
-# --------------------------  End of Exception Definitions --------------------------------
 
 
 class ControlGroupDataSet:
@@ -65,7 +56,7 @@ class ControlGroupDataSet:
             print("Unable to add record to control group")
             e = sys.exc_info()[0]
             print("<p>Error: %s</p>" % e)
-            exit(2)
+            raise(NoResultsReturnedError(message="Error adding record to Control Group"))
             return False
 
     def add_selected_control_group_record_to_collection(self, master_dataset):
@@ -73,13 +64,14 @@ class ControlGroupDataSet:
         try:
             self.create_record()
             master_dataset = master_dataset.append(self.record, ignore_index=True)
+            master_dataset.to_csv('C:/Users/JRytt/Documents/Brad V/Product v4/WIP/Temp_CSV.csv', sep='~', index=False)
             print("Added Record: ", self.control_number, self.search_for_description)
             return master_dataset
         except Exception:
             print("Unable to add record to control group")
             e = sys.exc_info()[0]
             print("<p>Error: %s</p>" % e)
-            exit(2)
+            raise(NoResultsReturnedError(message="Control Group to Master Data Collection"))
 
     """
     def add_record(self):
@@ -95,13 +87,13 @@ class ControlGroupDataSet:
         # :return:
 
         if self.control_collection.empty:
-            print("Control Group Collection was empty -- This should not happen")
-            exit(2)
+            raise(NoResultsReturnedError(message="Control Group Collection was empty -- This should not happen"))
         else:
             try:
                 self.control_collection.sort_values(by=['Price'], inplace=True)  # sort by 'amount' column low to high
-                self.control_collection = self.control_collection.iloc[1:, :]
-                self.control_collection = self.control_collection.iloc[:-1, :]
+                if self.control_collection["Control #"].count() > 2:
+                    self.control_collection = self.control_collection.iloc[1:, :]           # Throw out low record
+                    self.control_collection = self.control_collection.iloc[:-1, :]          # throw out high record
                 self.average_price = self.control_collection["Price"].mean()
                 self.low_price = self.control_collection["Price"].min()
                 self.high_price = self.control_collection["Price"].max()
@@ -109,7 +101,7 @@ class ControlGroupDataSet:
                 print("Unable to sort/get min/max value from the record from the Control Group")
                 e = sys.exc_info()[0]
                 print("<p>Error: %s</p>" % e)
-                exit(2)
+                raise(NoResultsReturnedError(message="Control Group to Master Data Collection"))
 
             # noinspection PyCompatibility
             for index, row in self.control_collection.T.iteritems():
@@ -143,7 +135,7 @@ class ControlGroupDataSet:
                     print("Unable to add record to Master Collection")
                     e = sys.exc_info()[0]
                     print("<p>Error: %s</p>" % e)
-                    exit(2)
+                    raise(NoResultsReturnedError(message="Control Group to Master Data Collection"))
 
 
 # --------------------------------------  End of Class FoundDataSet  ----------------------------------------------

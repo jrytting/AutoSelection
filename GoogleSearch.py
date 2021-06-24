@@ -56,14 +56,9 @@ class GoogleRecordSearch:
     browser = webdriver.Chrome()  # options=options
 
     def check_recaptcha(self, html_soup):
-        """
-        Examines the web page to see if there is a Recaptcha web page checking for robots  --I am not a robot
-
-        :param html_soup:
-        :return: True or False
-        """
         if len(html_soup.find_all('div', {'id': "recaptcha"})) > 0:
-            raise(ReCaptchaError(message="reCaptcha Screen is blocking our search"))
+            #raise(ReCaptchaError(message="reCaptcha Screen is blocking our search"))
+            return True
         else:
             return False
 
@@ -75,19 +70,14 @@ class GoogleRecordSearch:
 
     def clean_the_money(self, amount):
         try:
-            split_list = amount.split('.')
-            amount = split_list[0]
-            split_list = amount.split(' ')
-            amount = split_list[0]  # Trim off cents
-            split_list = amount.split('$')
-            amount = split_list[1]  # trim off the $
-            amount = amount.replace(",", "")
+            amount = amount.lower().translate({ord(i): None for i in 'abcdefghijklmnopqrstuvwxyz$*!@#%()+-, '})
+            amount = amount.split(".")[0]
             amount = int(amount)
-        except Exception:
+        except Exception as e:
             print('Warning -- Error cleaning the money: ' + amount)
             e = sys.exc_info()[0]
             print("<p>Error: %s</p>" % e)
-            exit(2)
+            raise(NoResultsReturnedError(message="No results were returned by Search"))
 
         return amount
 
@@ -100,28 +90,25 @@ class GoogleRecordSearch:
         html_soup = BeautifulSoup(html, 'html.parser')
 
         if self.check_recaptcha(html_soup):
+            for x in range(10):
+                for beep in range(3):
+                    winsound.Beep(440, 500)
 
-            for beep in range(10):
-                winsound.Beep(440, 500)
+                time.sleep(30)
+                print("Waking up... let's see if recaptcha is still blocking us")
+                html = self.browser.page_source
+                html_soup = BeautifulSoup(html, 'html.parser')
+                if self.check_recaptcha(html_soup):
+                    continue
+                else:
+                    break
 
-            time.sleep(5)
-            """
-            time.sleep(30)
-            print("Waking up... let's see if recaptcha is still blocking us")
-            html = self.browser.page_source
-            html_soup = BeautifulSoup(html, 'html.parser')
-            if self.check_recaptcha(html_soup):
-                continue
-            else:
-                break
-            """
-
-        if self.check_no_results(html_soup):
+        if not self.check_no_results(html_soup):
             pass
 
         product_counter = 0
 
-        for search_list in html_soup.find_all('div', {'class': "KZmu8e"}, limit=5):
+        for search_list in html_soup.find_all('div', {'class': "KZmu8e"}, limit=10):
             try:
 
                 for each_product in search_list.find_all('div', {'class': "sh-np__product-title translate-content"}):
@@ -145,12 +132,14 @@ class GoogleRecordSearch:
                 print("AttributeError Exception... check Control Number: " + control_group.control_number + \
                       " Description:" + control_group.search_for_description)
                 product_counter = 0
+                raise (NoResultsReturnedError(message="No results were returned by Search"))
 
             except Exception:
                 e = sys.exc_info()[0]
                 print("<p>Error: %s</p>" % e)
                 product_counter = 0
-                break
+                # break
+                raise(NoResultsReturnedError(message="No results were returned by Search"))
 
             if product_counter != 0:
                 control_group.add_record_to_control_group()
@@ -183,12 +172,14 @@ class GoogleRecordSearch:
                       " Description:" + control_group.search_for_description)
 
                 product_counter = 0
-                break
+                # break
+                raise (NoResultsReturnedError(message="No results were returned by Search"))
             except Exception:
                 e = sys.exc_info()[0]
                 print("<p>Error: %s</p>" % e)
                 product_counter = 0
-                break
+                # break
+                raise (NoResultsReturnedError(message="No results were returned by Search"))
 
             if product_counter != 0:
                 control_group.add_record_to_control_group()
@@ -220,14 +211,17 @@ class GoogleRecordSearch:
                 print("AttributeError Exception... check Control Number: " + control_group.control_number +
                       " Description:" + control_group.search_for_description)
                 product_counter = 0
-                break
+                # break
+                raise (NoResultsReturnedError(message="No results were returned by Search"))
             except Exception:
                 e = sys.exc_info()[0]
                 print("<p>Error: %s</p>" % e)
                 product_counter = 0
-                break
+                # break
+                raise (NoResultsReturnedError(message="No results were returned by Search"))
 
             if product_counter != 0:
                 control_group.add_record_to_control_group()
+
 
         # ---------------------------------------------------------------------------------------
