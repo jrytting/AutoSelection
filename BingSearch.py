@@ -44,7 +44,7 @@ class NoResultsReturnedError(Exception):
 # --------------------------  End of Exception Definitions --------------------------------
 
 
-class DuckDuckGoSearch:
+class BingSearch:
     def __init__(self, name=''):
         self.name = name
 
@@ -57,7 +57,7 @@ class DuckDuckGoSearch:
 
     def check_recaptcha(self, html_soup):
         if len(html_soup.find_all('div', {'id': "recaptcha"})) > 0:
-            #raise(ReCaptchaError(message="reCaptcha Screen is blocking our search"))
+            # raise(ReCaptchaError(message="reCaptcha Screen is blocking our search"))
             return True
         else:
             return False
@@ -108,16 +108,13 @@ class DuckDuckGoSearch:
 
         product_counter = 0
 
-        pretty = html_soup.prettify()
-
         for search_list in html_soup.find_all('div',
                                               {'class': "br-gOffCard br-narrowOffCard br-offHover br-vistrackitm"},
                                               limit=10):
             try:
-
                 for product_link in search_list.find_all('a', href=True):
                     # Add the URL of the product found to the record set
-                    control_group.found_search_url = "https://bing.com/" + product_link['href'].lstrip()
+                    control_group.found_search_url = product_link['href'].lstrip()
                     break
 
                 for each_product in product_link.find_all('div', {'class': "br-offCnt"}, limit=5):
@@ -151,6 +148,7 @@ class DuckDuckGoSearch:
                 # break
                 raise(NoResultsReturnedError(message="No results were returned by Search"))
 
+        # -----------------2nd Attempt----------------------------------------------------------------------
         for search_list in html_soup.find_all('div', {'class': "br-freeads"}):
             try:
 
@@ -159,17 +157,27 @@ class DuckDuckGoSearch:
 
                     for product_link in each_product.find_all('a', class_="ofr_lnk"):
                         # Add the URL of the product found to the record set
-                        control_group.found_search_url = "https://bing.com/" + product_link['href'].lstrip()
+                        control_group.found_search_url = product_link['href'].lstrip()
                         break
 
                     for each_description in each_product.find_all('div', class_="br-pdItemName-onHover"):
                         description = each_description.get_text()
-
                         # Add the description of the product found to the record set
                         control_group.found_description = description
                         break
 
+                    # Alternative Description Screen Location
+                    for each_description in each_product.find_all('a', class_="br-voidlink br-titleClickWrap"):
+                        description = each_description.get_text()
+                        control_group.found_description = description
+
                     for product_price in each_product.find_all('div', {'class', "pd-price"}):
+                        # Add the price of the product found to the record set
+                        control_group.found_price = self.clean_the_money(product_price.get_text())
+                        break
+
+                    # Alternative Pricing Screen Location
+                    for product_price in each_product.find_all('span', {'class', "br-focusPrice"}):
                         # Add the price of the product found to the record set
                         control_group.found_price = self.clean_the_money(product_price.get_text())
                         break
@@ -193,86 +201,4 @@ class DuckDuckGoSearch:
         #  Take this out when adding additional searches....
         if product_counter == 0:
             raise (NoResultsReturnedError(message="No results were returned by Search"))
-
-        """
-        # -----------------2nd Attempt----------------------------------------------------------------------
-        for search_list in html_soup.find_all('div', {'class': "sh-dlr__list-result"}, limit=5):
-            product_counter += 1
-            try:
-                description = ''
-
-                for product_link in search_list.find_all('a', href=True):
-                    # Add the URL of the product found to the record set
-                    control_group.found_search_url ="https://duckduckgo.com/" + product_link['href'].lstrip()
-
-                    # control_group.found_search_url = "https://duckduckgo.com/" + product_link['href']
-                    if len(product_link['href']) > 0:
-                        break
-
-                for product_description in search_list.find_all('h3', {'class': "OzIAJc"}):
-                    description += product_description.get_text() + " "
-                    # Add the description of the product found to the record set
-                    # control_group.found_description = make_a_link(tiny_url, description)
-                    control_group.found_description = description
-
-                for product_price in search_list.find_all('span', {'class', "QIrs8"}):
-                    control_group.found_price = self.clean_the_money(product_price.get_text())
-                    break
-            except AttributeError:
-                print("AttributeError Exception... check Control Number: " + control_group.control_number +
-                      " Description:" + control_group.search_for_description)
-
-                product_counter = 0
-                # break
-                raise (NoResultsReturnedError(message="No results were returned by Search"))
-            except Exception:
-                e = sys.exc_info()[0]
-                print("<p>Error: %s</p>" % e)
-                product_counter = 0
-                # break
-                raise (NoResultsReturnedError(message="No results were returned by Search"))
-
-            if product_counter != 0:
-                control_group.add_record_to_control_group()
-        """
-        """
-        # --------------------------------------------------------------------------------------------------
-        # -----------------3rd Attempt----------------------------------------------------------------------
-        for search_list in html_soup.find_all('div', {'class': "sh-dgr__gr-auto sh-dgr__grid-result"}, limit=5):
-            product_counter += 1
-            try:
-                description = ''
-
-                for product_link in search_list.find_all('a', href=True):
-                    # Add the URL of the product found to the record set
-                    control_group.found_search_url ="https://duckduckgo.com/" + product_link['href'].lstrip()
-                    if len(product_link['href']) > 0:
-                        break
-
-                for product_description in search_list.find_all('h4', {'class': "A2sOrd"}):
-                    description += product_description.get_text() + " "
-                    # Add the description of the product found to the record set
-                    control_group.found_description = description
-
-                for product_price in search_list.find_all('span', {'class', "QIrs8"}):
-                    # Add the price of the product found to the record set
-                    control_group.found_price = self.clean_the_money(product_price.get_text())
-                    break
-            except AttributeError:
-                print("AttributeError Exception... check Control Number: " + control_group.control_number +
-                      " Description:" + control_group.search_for_description)
-                product_counter = 0
-                # break
-                raise (NoResultsReturnedError(message="No results were returned by Search"))
-            except Exception:
-                e = sys.exc_info()[0]
-                print("<p>Error: %s</p>" % e)
-                product_counter = 0
-                # break
-                raise (NoResultsReturnedError(message="No results were returned by Search"))
-
-            if product_counter != 0:
-                control_group.add_record_to_control_group()
-
-        """
         # ---------------------------------------------------------------------------------------

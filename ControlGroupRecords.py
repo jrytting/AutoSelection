@@ -1,13 +1,14 @@
 from datetime import datetime
 import winsound
 import pandas as pd
+import numpy as np
+from sklearn.datasets import load_iris
 import time
 import sys
+import tabulate
 import ControlGroupCollection
 from GoogleSearch import NoResultsReturnedError
 from GoogleSearch import ReCaptchaError
-
-
 
 
 class ControlGroupDataSet:
@@ -42,8 +43,8 @@ class ControlGroupDataSet:
         self.record["Selected Item Description"] = self.found_description
         self.record["Price"] = self.found_price
         if self.low_price != '':
-            self.record["Low"] = self.low_price                 #Only create these on the master collection
-            self.record["High"] = self.high_price               #Only create these on the master collection
+            self.record["Low"] = self.low_price                 # Only create these on the master collection
+            self.record["High"] = self.high_price               # Only create these on the master collection
         self.record["URL Used For Search"] = self.source_url
         self.record["Selected Item URL"] = self.found_search_url
 
@@ -57,14 +58,12 @@ class ControlGroupDataSet:
             e = sys.exc_info()[0]
             print("<p>Error: %s</p>" % e)
             raise(NoResultsReturnedError(message="Error adding record to Control Group"))
-            return False
 
     def add_selected_control_group_record_to_collection(self, master_dataset):
         # Build the record and commit to master data set
         try:
             self.create_record()
             master_dataset = master_dataset.append(self.record, ignore_index=True)
-            master_dataset.to_csv('C:/Users/JRytt/Documents/Brad V/Product v4/WIP/Temp_CSV.csv', sep='~', index=False)
             print("Added Record: ", self.control_number, self.search_for_description)
             return master_dataset
         except Exception:
@@ -72,11 +71,6 @@ class ControlGroupDataSet:
             e = sys.exc_info()[0]
             print("<p>Error: %s</p>" % e)
             raise(NoResultsReturnedError(message="Control Group to Master Data Collection"))
-
-    """
-    def add_record(self):
-        self.control_collection = self.control_collection.append(self.record, ignore_index=True)
-    """
 
     def get_df_collection(self):
         return self.control_collection
@@ -87,7 +81,8 @@ class ControlGroupDataSet:
         # :return:
 
         if self.control_collection.empty:
-            raise(NoResultsReturnedError(message="Control Group Collection was empty -- This should not happen"))
+            return master_data
+            # raise(NoResultsReturnedError(message="Control Group Collection was empty -- This should not happen"))
         else:
             try:
                 self.control_collection.sort_values(by=['Price'], inplace=True)  # sort by 'amount' column low to high
@@ -98,6 +93,7 @@ class ControlGroupDataSet:
                 self.low_price = self.control_collection["Price"].min()
                 self.high_price = self.control_collection["Price"].max()
             except Exception:
+                print(self.control_collection.to_markdown())
                 print("Unable to sort/get min/max value from the record from the Control Group")
                 e = sys.exc_info()[0]
                 print("<p>Error: %s</p>" % e)
@@ -129,13 +125,11 @@ class ControlGroupDataSet:
                     self.source_url = row["URL Used For Search"]
                     self.found_search_url = row["Selected Item URL"]
                 try:
-                    #Build Selected/Target Recordset and add to Master Collection
+                    # Build Selected/Target Recordset and add to Master Collection
                     return self.add_selected_control_group_record_to_collection(master_data)
                 except Exception:
                     print("Unable to add record to Master Collection")
                     e = sys.exc_info()[0]
                     print("<p>Error: %s</p>" % e)
                     raise(NoResultsReturnedError(message="Control Group to Master Data Collection"))
-
-
 # --------------------------------------  End of Class FoundDataSet  ----------------------------------------------

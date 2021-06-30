@@ -184,8 +184,6 @@ class GoogleRecordSearch:
             if product_counter != 0:
                 control_group.add_record_to_control_group()
 
-
-        # --------------------------------------------------------------------------------------------------
         # -----------------3rd Attempt----------------------------------------------------------------------
         for search_list in html_soup.find_all('div', {'class': "sh-dgr__gr-auto sh-dgr__grid-result"}, limit=5):
             product_counter += 1
@@ -194,7 +192,7 @@ class GoogleRecordSearch:
 
                 for product_link in search_list.find_all('a', href=True):
                     # Add the URL of the product found to the record set
-                    control_group.found_search_url ="https://www.google.com" + product_link['href'].lstrip()
+                    control_group.found_search_url = "https://www.google.com" + product_link['href'].lstrip()
                     if len(product_link['href']) > 0:
                         break
 
@@ -222,6 +220,5 @@ class GoogleRecordSearch:
 
             if product_counter != 0:
                 control_group.add_record_to_control_group()
-
 
         # ---------------------------------------------------------------------------------------
